@@ -1,7 +1,7 @@
 // End-to-end test of dist/nook-site.js in real Chromium with Google/Meta stubbed. Run: node tests/e2e.cjs
 const { chromium } = require('playwright'); const fs = require('fs'), path = require('path');
 const bundle = fs.readFileSync(path.join(__dirname, '..', 'dist', 'nook-site.js'), 'utf8');
-const PAGE = extra => `<!doctype html><html><body>${extra || ''}<a id="gift" href="https://buy.stripe.com/abc" onclick="return false">Gift</a><a id="cs" href="#cookie-settings">Cookie settings</a><a id="book" href="https://nookonthehill.lodgify.com/x" onclick="return false">Book</a><script src="https://cdn.jsdelivr.net/gh/x/nook-site.js"></script></body></html>`;
+const PAGE = extra => `<!doctype html><html><body>${extra || ''}<a id="gift" href="https://buy.stripe.com/abc" onclick="return false">Gift</a><a id="cs" href="/privacy-policy#cookie-settings">Cookie settings</a><a id="book" href="https://nookonthehill.lodgify.com/x" onclick="return false">Book</a><script src="https://cdn.jsdelivr.net/gh/x/nook-site.js"></script></body></html>`;
 const results = []; const test = (n, ok, info) => { results.push(ok); console.log((ok ? 'PASS ' : 'FAIL ') + n + (ok ? '' : '  ' + (info || ''))); };
 
 async function visit(browser, tz, { url = 'http://nook.test/', storage, html, after } = {}) {

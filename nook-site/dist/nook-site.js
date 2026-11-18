@@ -160,7 +160,7 @@
 
   // Any link to #cookie-settings (for example in the privacy policy or footer) reopens the choices.
   document.addEventListener('click', function (ev) {
-    var a = ev.target && ev.target.closest ? ev.target.closest('a[href="#cookie-settings"]') : null;
+    var a = ev.target && ev.target.closest ? ev.target.closest('a[href$="#cookie-settings"]') : null;
     if (a) { ev.preventDefault(); window.nookShowModal(); }
   });
 
