@@ -41,6 +41,13 @@ const vis = (page, sel) => page.evaluate(sel => { const e = document.querySelect
   s = await visit(browser, 'Australia/Melbourne', { storage: { nook_consent: kept.k, nook_consent_date: kept.d } });
   test('AU returning after Got it: no notice, tracking still on', !s.banner && /granted/.test(upd(s)) && s.meta);
   await s.ctx.close();
+  // 2b. The X closes the Australian notice like Got it, and Europe has no X
+  s = await visit(browser, 'Australia/Melbourne');
+  test('AU: X is visible and closes the notice like Got it (tracking stays on, stored, not shown again)', await vis(s.page, '.nook-cookie-close') && (await s.page.click('.nook-cookie-close'), await s.page.waitForTimeout(100), !await vis(s.page, '#nook-cookie-banner.visible')) && /"implied":true/.test(await s.page.evaluate(() => localStorage.getItem('nook_consent'))) && (await s.page.evaluate(() => Array.from(window.dataLayer).map(a => Array.from(a).join(' ')))).some(l => /nook_consent_ack/.test(l)));
+  await s.ctx.close();
+  s = await visit(browser, 'Europe/London');
+  test('Europe: no X, banner stays until they choose', !await vis(s.page, '.nook-cookie-close') && s.banner);
+  await s.ctx.close();
   // 3. Australia, Choose then Turn all off
   s = await visit(browser, 'Australia/Sydney', { after: async p => { await p.click('.nook-cookie-decline.nook-only-notice'); await p.waitForTimeout(100); } });
   test('AU Choose opens modal with notice wording and Turn all off', await vis(s.page, '#nook-cookie-modal.visible') && await vis(s.page, '#nook-cookie-modal .nook-modal-actions .nook-only-notice') && !await vis(s.page, '#nook-cookie-modal .nook-modal-actions .nook-cookie-accept.nook-only-optin'));

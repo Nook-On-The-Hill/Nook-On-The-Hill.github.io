@@ -187,3 +187,19 @@
   }
   #nook-cookie-banner.nook-notice .nook-only-optin, #nook-cookie-modal.nook-notice .nook-only-optin { display: none !important; }
   #nook-cookie-banner.nook-optin .nook-only-notice, #nook-cookie-modal.nook-optin .nook-only-notice { display: none !important; }
+  #nook-cookie-banner { padding-right: 56px; }
+  .nook-cookie-close {
+    position: absolute;
+    top: 6px;
+    right: 10px;
+    width: 40px;
+    height: 40px;
+    font-size: 24px;
+    line-height: 1;
+    color: #38312B;
+    background: none;
+    border: none;
+    cursor: pointer;
+    opacity: 0.6;
+  }
+  .nook-cookie-close:hover { opacity: 1; }
