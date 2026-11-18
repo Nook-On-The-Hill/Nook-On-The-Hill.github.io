@@ -80,6 +80,7 @@ const vis = (page, sel) => page.evaluate(sel => { const e = document.querySelect
   await s.ctx.close();
   // 8. Gift link tagging and click ID event in Australia
   s = await visit(browser, 'Australia/Melbourne', { url: 'http://nook.test/?gclid=Cj0KCQiAabcdefghijk&utm_source=x' });
+  await s.page.waitForFunction(() => Array.from(window.dataLayer || []).some(a => a[1] === 'nook_click_id'), null, { timeout: 5000 });
   await s.page.click('#gift'); const href = await s.page.getAttribute('#gift', 'href'); await s.page.click('#book'); await s.page.waitForTimeout(100);
   const dl3 = await s.page.evaluate(() => Array.from(window.dataLayer).map(a => Array.from(a).map(x => typeof x === 'object' ? JSON.stringify(x) : x).join(' ')));
   test('Gift link gets client_reference_id', /client_reference_id=nk1__/.test(href), href);
