@@ -1,0 +1,21 @@
+name: Nook site scripts
+on:
+  push:
+    branches: [main]
+    paths: ['nook-site/**', '.github/workflows/nook-site.yml']
+  pull_request:
+    paths: ['nook-site/**']
+jobs:
+  test-and-publish:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: nook-site } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+      - name: Refresh jsDelivr cache
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: curl -fsS "https://purge.jsdelivr.net/gh/Nook-On-The-Hill/Nook-On-The-Hill.github.io@main/nook-site/dist/nook-site.js" || echo "purge request failed; cache expires on its own"

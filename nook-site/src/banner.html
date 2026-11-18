@@ -1,0 +1,60 @@
+<div id="nook-cookie-banner" role="dialog" aria-label="Cookie preferences">
+  <p>
+    <span class="nook-only-optin">We want your online experience to be as cosy and inviting as our little house on the hill. We use cookies to make that happen. If that's okay with you, click 'Accept All'. If not, please adjust your preferences.</span>
+    <span class="nook-only-notice">We want your online experience to be as cosy and inviting as our little house on the hill. We use cookies to understand how guests find us and to measure our ads, and they're switched on by default here in Australia. If you'd rather they weren't, tap 'Choose'.</span>
+    <a href="/privacy-policy">Privacy policy</a>.
+  </p>
+  <div class="nook-cookie-actions">
+    <button class="nook-cookie-manage nook-only-optin" onclick="nookShowModal()">Manage</button>
+    <button class="nook-cookie-decline nook-only-optin" onclick="nookDecline()">Decline</button>
+    <button class="nook-cookie-accept nook-only-optin" onclick="nookAcceptAll()">Accept All</button>
+    <button class="nook-cookie-decline nook-only-notice" onclick="nookShowModal()">Choose</button>
+    <button class="nook-cookie-accept nook-only-notice" onclick="nookAcknowledge()">Got it</button>
+  </div>
+</div>
+
+<div id="nook-cookie-modal" role="dialog" aria-label="Manage cookie preferences">
+  <div class="nook-modal-box">
+    <h2>Cookie preferences</h2>
+    <p>
+      <span class="nook-only-optin">Choose which cookies you'd like to allow. Strictly necessary cookies keep the site running and cannot be turned off.</span>
+      <span class="nook-only-notice">Here in Australia these are on by default. Switch off anything you'd rather we didn't use. Strictly necessary cookies keep the site running and cannot be turned off.</span>
+    </p>
+    <div class="nook-pref-row">
+      <div>
+        <p class="nook-pref-label">Strictly necessary</p>
+        <p class="nook-pref-desc">Required for the site to function. Always on.</p>
+      </div>
+      <label class="nook-toggle">
+        <input type="checkbox" checked disabled>
+        <span class="nook-toggle-slider"></span>
+      </label>
+    </div>
+    <div class="nook-pref-row">
+      <div>
+        <p class="nook-pref-label">Analytics</p>
+        <p class="nook-pref-desc">Google Analytics: helps us understand how guests find and use the site. If you decline, Google receives only anonymous, cookie-free counts.</p>
+      </div>
+      <label class="nook-toggle">
+        <input type="checkbox" id="nook-pref-analytics" checked>
+        <span class="nook-toggle-slider"></span>
+      </label>
+    </div>
+    <div class="nook-pref-row">
+      <div>
+        <p class="nook-pref-label">Marketing</p>
+        <p class="nook-pref-desc">Google Ads and Meta Pixel: let us measure our ads and show relevant ads to people who've visited the site.</p>
+      </div>
+      <label class="nook-toggle">
+        <input type="checkbox" id="nook-pref-marketing" checked>
+        <span class="nook-toggle-slider"></span>
+      </label>
+    </div>
+    <div class="nook-modal-actions">
+      <button class="nook-cookie-decline nook-only-notice" onclick="nookDecline()">Turn all off</button>
+      <button class="nook-cookie-decline" onclick="nookSavePreferences()">Save preferences</button>
+      <button class="nook-cookie-accept nook-only-optin" onclick="nookAcceptAll()">Accept All</button>
+      <button class="nook-cookie-accept nook-only-notice" onclick="nookAcceptAll()">Keep all on</button>
+    </div>
+  </div>
+</div>

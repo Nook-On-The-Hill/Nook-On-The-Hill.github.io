@@ -1,0 +1,189 @@
+
+  #nook-cookie-banner {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 99999;
+    background: #F3E4D0;
+    border-top: 1px solid rgba(35,29,25,0.18);
+    padding: 18px 32px;
+    font-family: 'Roboto Slab', serif;
+    font-weight: 300;
+    box-sizing: border-box;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+    animation: nookSlideUp 0.4s ease;
+  }
+  #nook-cookie-banner.visible { display: flex; }
+  @keyframes nookSlideUp {
+    from { transform: translateY(100%); opacity: 0; }
+    to   { transform: translateY(0);   opacity: 1; }
+  }
+  #nook-cookie-banner p {
+    flex: 1;
+    min-width: 240px;
+    font-size: 12px;
+    color: #38312B;
+    line-height: 1.8;
+    margin: 0;
+    letter-spacing: 0.03em;
+  }
+  #nook-cookie-banner p a {
+    color: #B26E3F;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(178,110,63,0.35);
+  }
+  .nook-cookie-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .nook-cookie-manage {
+    font-family: 'Roboto Slab', serif;
+    font-weight: 300;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #B26E3F;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(178,110,63,0.3);
+    white-space: nowrap;
+  }
+  .nook-cookie-decline {
+    font-family: 'Roboto Slab', serif;
+    font-weight: 300;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #38312B;
+    background: transparent;
+    border: 1px solid rgba(35,29,25,0.35);
+    border-radius: 6px;
+    padding: 9px 18px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.2s;
+  }
+  .nook-cookie-decline:hover { border-color: rgba(35,29,25,0.65); }
+  .nook-cookie-accept {
+    font-family: 'Roboto Slab', serif;
+    font-weight: 300;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #F3E4D0;
+    background: #231D19;
+    border: 1px solid #231D19;
+    border-radius: 6px;
+    padding: 9px 18px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity 0.2s;
+  }
+  .nook-cookie-accept:hover { opacity: 0.85; }
+  #nook-cookie-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    background: rgba(35,29,25,0.55);
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+  #nook-cookie-modal.visible { display: flex; }
+  .nook-modal-box {
+    background: #F3E4D0;
+    border-radius: 10px;
+    max-width: 460px;
+    width: 100%;
+    padding: 32px;
+    font-family: 'Roboto Slab', serif;
+    font-weight: 300;
+  }
+  .nook-modal-box h2 {
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: #38312B;
+    margin: 0 0 16px;
+    font-weight: 300;
+  }
+  .nook-modal-box p {
+    font-size: 12px;
+    color: #58514B;
+    line-height: 1.8;
+    margin: 0 0 24px;
+  }
+  .nook-pref-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 16px 0;
+    border-top: 1px solid rgba(35,29,25,0.1);
+    gap: 16px;
+  }
+  .nook-pref-label {
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #38312B;
+    margin: 0 0 4px;
+  }
+  .nook-pref-desc {
+    font-size: 11px;
+    color: #58514B;
+    line-height: 1.6;
+    margin: 0;
+  }
+  .nook-toggle {
+    position: relative;
+    flex-shrink: 0;
+    width: 40px;
+    height: 22px;
+  }
+  .nook-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .nook-toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: rgba(35,29,25,0.2);
+    border-radius: 22px;
+    cursor: pointer;
+    transition: background 0.25s;
+  }
+  .nook-toggle-slider:before {
+    content: '';
+    position: absolute;
+    width: 16px; height: 16px;
+    left: 3px; top: 3px;
+    background: #F3E4D0;
+    border-radius: 50%;
+    transition: transform 0.25s;
+  }
+  .nook-toggle input:checked + .nook-toggle-slider { background: #B26E3F; }
+  .nook-toggle input:checked + .nook-toggle-slider:before { transform: translateX(18px); }
+  .nook-toggle input:disabled + .nook-toggle-slider { opacity: 0.6; cursor: default; }
+  .nook-modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 24px;
+    flex-wrap: wrap;
+  }
+  @media (max-width: 540px) {
+    #nook-cookie-banner { padding: 16px 20px; }
+    #nook-cookie-banner p { font-size: 11px; }
+    .nook-cookie-actions { width: 100%; justify-content: flex-end; }
+    .nook-modal-box { padding: 24px 20px; }
+  }
+  #nook-cookie-banner.nook-notice .nook-only-optin, #nook-cookie-modal.nook-notice .nook-only-optin { display: none !important; }
+  #nook-cookie-banner.nook-optin .nook-only-notice, #nook-cookie-modal.nook-optin .nook-only-notice { display: none !important; }
