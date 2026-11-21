@@ -10,7 +10,7 @@ const out = [
   '(function () {',
   '  if (window.__nookSite) return;',
   "  if (document.getElementById('nook-cookie-banner')) { console.warn('Nook: old cookie banner code is still pasted in Showit; remove it so only the loader line remains.'); return; }",
-  '  window.__nookSite = 4;', '',
+  '  window.__nookSite = 5;', '',
   consent, '', r('gift.js'), '', r('clickid.js'),
   '})();', ''
 ].join('\n');

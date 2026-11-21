@@ -1,13 +1,15 @@
 // End-to-end test of dist/nook-site.js in real Chromium with Google/Meta stubbed. Run: node tests/e2e.cjs
 const { chromium } = require('playwright'); const fs = require('fs'), path = require('path');
-const bundle = fs.readFileSync(path.join(__dirname, '..', 'dist', 'nook-site.js'), 'utf8');
+const bundle = fs.readFileSync(path.join(__dirname, '..', 'dist', 'nook-site.js'), 'utf8').replace('__NOOK_BEACON_ID__', 'TESTBEACON');
 const PAGE = extra => `<!doctype html><html><body>${extra || ''}<a id="gift" href="https://buy.stripe.com/abc" onclick="return false">Gift</a><a id="cs" href="/privacy-policy#cookie-settings">Cookie settings</a><a id="book" href="https://nookonthehill.lodgify.com/x" onclick="return false">Book</a><script src="https://cdn.jsdelivr.net/gh/x/nook-site.js"></script></body></html>`;
 const results = []; const test = (n, ok, info) => { results.push(ok); console.log((ok ? 'PASS ' : 'FAIL ') + n + (ok ? '' : '  ' + (info || ''))); };
 
-async function visit(browser, tz, { url = 'http://nook.test/', storage, html, after } = {}) {
-  const ctx = await browser.newContext({ timezoneId: tz }); const page = await ctx.newPage(); const hits = [];
+async function visit(browser, tz, { url = 'http://nook.test/', storage, html, after, cookies } = {}) {
+  const ctx = await browser.newContext({ timezoneId: tz }); const page = await ctx.newPage(); const hits = [], beacons = [];
+  if (cookies) await page.addInitScript(c => { c.forEach(x => { document.cookie = x + '; path=/'; }); }, cookies);
   await page.route('**/*', r => {
     const u = r.request().url(); hits.push(u);
+    if (/script\.google\.com/.test(u)) { beacons.push(r.request().postData() || ''); return r.fulfill({ contentType: 'text/plain', body: 'ok' }); }
     if (u.startsWith('http://nook.test/')) return r.fulfill({ contentType: 'text/html', body: PAGE(html) });
     if (/jsdelivr/.test(u)) return r.fulfill({ contentType: 'application/javascript', body: bundle });
     return r.fulfill({ contentType: 'application/javascript', body: '' });
@@ -19,7 +21,7 @@ async function visit(browser, tz, { url = 'http://nook.test/', storage, html, af
     banner: await page.evaluate(() => !!document.querySelector('#nook-cookie-banner.visible')),
     mode: await page.evaluate(() => (document.getElementById('nook-cookie-banner') || {}).className || ''),
     dl: await page.evaluate(() => Array.from(window.dataLayer || []).map(a => Array.from(a).map(x => (x && typeof x === 'object' && !(x instanceof Date)) ? JSON.stringify(x) : String(x)).join(' '))),
-    meta: hits.some(u => /fbevents/.test(u)), gtag: hits.some(u => /googletagmanager/.test(u)), consent: await page.evaluate(() => window.nookConsent && JSON.stringify(window.nookConsent())), page, ctx, hits
+    meta: hits.some(u => /fbevents/.test(u)), gtag: hits.some(u => /googletagmanager/.test(u)), consent: await page.evaluate(() => window.nookConsent && JSON.stringify(window.nookConsent())), page, ctx, hits, beacons
   });
   return state();
 }
@@ -100,6 +102,21 @@ const vis = (page, sel) => page.evaluate(sel => { const e = document.querySelect
   s = await visit(browser, 'Europe/Paris', { url: 'http://nook.test/?gclid=Cj0KCQiAabcdefghijk', after: async p => { await p.click('.nook-cookie-decline.nook-only-optin'); await p.waitForTimeout(300); } });
   const dl4 = await s.page.evaluate(() => Array.from(window.dataLayer).map(a => Array.from(a).map(x => typeof x === 'object' ? JSON.stringify(x) : x).join(' ')));
   test('Europe declined: no click ID event, no gift event', !dl4.some(l => /nook_click_id|gift_click/.test(l)));
+  await s.ctx.close();
+  // 9b. v1.2 beacon: Australia (notice, tracking on) with a GA cookie and Google and Meta click IDs
+  s = await visit(browser, 'Australia/Melbourne', { url: 'http://nook.test/?gclid=Cj0KCQiAabcdefghijk&fbclid=IwAR0abcdefghijklmn&gbraid=GBRAIDabcdefghij', cookies: ['_ga=GA1.1.387258230.1795229525', '_fbp=fb.1.1795229525123.555666777'] });
+  await s.page.waitForTimeout(700);
+  let bc = s.beacons.map(b => { try { return JSON.parse(b); } catch (e) { return {}; } });
+  test('Beacon: sent once on the page with GA client ID, gclid, gbraid, Meta click (fb.1. format) and fbp', bc.length === 1 && bc[0].kind === 'click' && bc[0].gaClientId === '387258230.1795229525' && bc[0].gclid === 'Cj0KCQiAabcdefghijk' && bc[0].gbraid === 'GBRAIDabcdefghij' && /^fb\.1\.\d+\.IwAR0abcdefghijklmn$/.test(bc[0].fbc) && /^fb\.1\./.test(bc[0].fbp), JSON.stringify(s.beacons));
+  await s.page.click('#book'); await s.page.waitForTimeout(200);
+  test('Beacon: sent again when they click through to Lodgify', s.beacons.length === 2, JSON.stringify(s.beacons));
+  await s.ctx.close();
+  s = await visit(browser, 'Australia/Melbourne', { url: 'http://nook.test/?utm_source=x', cookies: ['_ga=GA1.1.387258230.1795229525'] });
+  await s.page.waitForTimeout(500);
+  test('Beacon: nothing sent for a visitor who did not come from an ad', s.beacons.length === 0, JSON.stringify(s.beacons));
+  await s.ctx.close();
+  s = await visit(browser, 'Europe/Paris', { url: 'http://nook.test/?gclid=Cj0KCQiAabcdefghijk', cookies: ['_ga=GA1.1.387258230.1795229525'], after: async p => { await p.click('.nook-cookie-decline.nook-only-optin'); await p.waitForTimeout(400); } });
+  test('Beacon: Europe declined, nothing sent', s.beacons.length === 0, JSON.stringify(s.beacons));
   await s.ctx.close();
   // 10. Phone width: banner fits
   const ctx = await browser.newContext({ timezoneId: 'Australia/Melbourne', viewport: { width: 375, height: 700 } }); const pg = await ctx.newPage();
