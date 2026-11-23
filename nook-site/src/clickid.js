@@ -1,4 +1,9 @@
-/* Nook ad click ID v1.2 (6 Nov 2026, v1.1 13 Nov 2026: needs Marketing as well as Analytics;
+/* Nook ad click ID v1.3 (23 Nov 2026, outside review round 2: each click message now says where the ID was read
+   (url, cookie, saved = this tab's session storage, stored = browser storage from an earlier visit) and when the ad
+   was clicked; consenting visitors' click IDs are also kept in browser storage for up to 90 days, so a return visit
+   after Safari has cleared Google's cookie (and the GA client ID) still links to the ad click; links to Lodgify
+   carry the cookie choice as nook_c=a1m1 (analytics, marketing) to test whether it reaches the confirmation page.
+   v1.2 and earlier: 6 Nov 2026, v1.1 13 Nov 2026: needs Marketing as well as Analytics;
    v1.2 22 Nov 2026: also tells the Nook Beacon (a tiny Apps Script web app that writes to the Data Vault)
    which ad click IDs this browser arrived with: gclid, gbraid, wbraid (Google), fbc and fbp (Meta), with the
    Google Analytics client ID. The Lodgify confirmation page sends the same client ID with the booking, so
@@ -31,13 +36,42 @@
     var ageDays = (Date.now() / 1000 - Number(m[1])) / 86400;
     return ageDays >= 0 && ageDays <= MAX_AGE_DAYS ? m[2] : '';
   }
-  function clickId() {
-    var id = fromUrl();
+  function clickId() { return clickInfo().id; }
+  // v1.3: the gclid with where it came from and when the ad was clicked (Unix seconds).
+  function clickInfo() {
+    var id = fromUrl(), src = 'url', at = Math.floor(Date.now() / 1000);
     try {
-      if (id) sessionStorage.setItem('nook_gclid', id);
-      else id = sessionStorage.getItem('nook_gclid') || '';
+      if (id) {
+        if (sessionStorage.getItem('nook_gclid') === id) at = Number(sessionStorage.getItem('nook_gclid_at')) || at;   // same click, page reloaded
+        else { sessionStorage.setItem('nook_gclid', id); sessionStorage.setItem('nook_gclid_at', String(at)); }
+      }
+      else { id = sessionStorage.getItem('nook_gclid') || ''; src = 'saved'; at = Number(sessionStorage.getItem('nook_gclid_at')) || 0; }
     } catch (e) {}
-    return valid(id) ? id : fromCookie();
+    if (valid(id)) return { id: id, src: src, at: at };
+    var m = document.cookie.match(/(?:^|;\s*)_gcl_aw=GCL\.(\d+)\.([^;]+)/);
+    if (fromCookie()) return { id: m[2], src: 'cookie', at: Number(m[1]) };
+    return { id: '', src: '', at: 0 };
+  }
+
+  // v1.3: browser storage copy (consenting visitors only, 90 days). {g: {gclid, gbraid, wbraid, at}, m: {fbc}}
+  var KEEP = 'nook_click';
+  function kept() {
+    try {
+      var k = JSON.parse(localStorage.getItem(KEEP) || 'null');
+      if (!k || !k.g && !k.m) return null;
+      var old = function (t) { return !t || Date.now() / 1000 - t > MAX_AGE_DAYS * 86400; };
+      if (k.g && old(k.g.at)) k.g = null;
+      if (k.m && old(Number((String(k.m.fbc).match(/^fb\.\d\.(\d{13})\./) || [])[1]) / 1000)) k.m = null;
+      return k.g || k.m ? k : null;
+    } catch (e) { return null; }
+  }
+  function keep(p) {
+    try {
+      var k = kept() || {};
+      if ((p.gclid || p.gbraid || p.wbraid) && p.clickSrc !== 'stored') k.g = { gclid: p.gclid, gbraid: p.gbraid, wbraid: p.wbraid, at: p.clickAt };
+      if (p.fbc) k.m = { fbc: p.fbc };
+      localStorage.setItem(KEEP, JSON.stringify(k));
+    } catch (e) {}
   }
 
   // v1.2: the beacon.
@@ -58,9 +92,22 @@
     if (/__NOOK/.test(BEACON) || !adsAllowed()) return false;
     var cid = gaClientId();
     if (!cid) return false;                                   // Google's tag hasn't set its cookie yet
-    var p = { kind: 'click', gaClientId: cid, gclid: clickId(), gbraid: valid(sess('nook_gbraid', param('gbraid'))) ? sess('nook_gbraid') : '',
-              wbraid: valid(sess('nook_wbraid', param('wbraid'))) ? sess('nook_wbraid') : '', fbc: metaClick(), fbp: cookie('_fbp'), note: trigger };
-    if (!p.gclid && !p.gbraid && !p.wbraid && !p.fbc) return true;   // not from an ad: nothing to tell
+    var ci = clickInfo(), urlBraid = param('gbraid') || param('wbraid');
+    var p = { kind: 'click', gaClientId: cid, gclid: ci.id, gbraid: valid(sess('nook_gbraid', param('gbraid'))) ? sess('nook_gbraid') : '',
+              wbraid: valid(sess('nook_wbraid', param('wbraid'))) ? sess('nook_wbraid') : '', fbc: metaClick(), fbp: cookie('_fbp'), note: trigger,
+              clickSrc: ci.src, clickAt: ci.at };
+    if (!p.gclid && (p.gbraid || p.wbraid)) {                // v1.3: gbraid/wbraid: from the URL now, or saved this session
+      if (urlBraid) { p.clickSrc = 'url'; p.clickAt = Math.floor(Date.now() / 1000); sess('nook_braid_at', String(p.clickAt)); }
+      else { p.clickSrc = 'saved'; p.clickAt = Number(sess('nook_braid_at')) || 0; }
+    }
+    if (!p.gclid && !p.gbraid && !p.wbraid && !p.fbc) {      // v1.3: nothing on this visit: an earlier ad click kept in browser storage?
+      var k = kept();
+      if (!k) return true;                                   // not from an ad: nothing to tell
+      if (k.g) { p.gclid = k.g.gclid || ''; p.gbraid = k.g.gbraid || ''; p.wbraid = k.g.wbraid || ''; p.clickAt = k.g.at || 0; }
+      if (k.m) p.fbc = k.m.fbc;
+      p.clickSrc = 'stored';
+    } else keep(p);
+    if (!p.clickAt) delete p.clickAt;
     var key = [p.gclid, p.gbraid, p.wbraid, p.fbc].join('|');
     if (trigger === 'page' && (key === beaconSent || sess('nook_beacon_key') === key)) return true;   // once per set of IDs
     if (trigger === 'book_click' && Date.now() - lastBeacon < 30000) return true;                       // one per click burst
@@ -99,7 +146,17 @@
   // Again when they head to Lodgify to book.
   function onPress(ev) {
     var a = ev.target && ev.target.closest ? ev.target.closest('a[href*="lodgify.com"]') : null;
+    if (a) mark(a);
     if (a && send('book_click')) sendBeacon('book_click');
+  }
+  // v1.3: the cookie choice on the link (no IDs, nothing personal), to test whether Lodgify carries it through.
+  function mark(a) {
+    try {
+      var c = window.nookConsent && window.nookConsent(); if (!c) return;
+      var u = new URL(a.href, location.href);
+      u.searchParams.set('nook_c', 'a' + (c.analytics ? 1 : 0) + 'm' + (c.marketing ? 1 : 0));
+      a.href = u.toString();
+    } catch (e) {}
   }
   document.addEventListener('pointerdown', onPress, true);
   document.addEventListener('click', onPress, true);

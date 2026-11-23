@@ -118,6 +118,29 @@ const vis = (page, sel) => page.evaluate(sel => { const e = document.querySelect
   s = await visit(browser, 'Europe/Paris', { url: 'http://nook.test/?gclid=Cj0KCQiAabcdefghijk', cookies: ['_ga=GA1.1.387258230.1795229525'], after: async p => { await p.click('.nook-cookie-decline.nook-only-optin'); await p.waitForTimeout(400); } });
   test('Beacon: Europe declined, nothing sent', s.beacons.length === 0, JSON.stringify(s.beacons));
   await s.ctx.close();
+  // 9c. v1.3: click source and time, browser storage copy, re-send on a later visit, consent marker on Lodgify links
+  s = await visit(browser, 'Australia/Melbourne', { url: 'http://nook.test/?gclid=Cj0KCQiAstoredstored1', cookies: ['_ga=GA1.1.387258230.1795229525'] });
+  await s.page.waitForTimeout(700);
+  bc = s.beacons.map(b => JSON.parse(b));
+  test('v1.3: click message says the gclid came from the URL, with a click time', bc.length === 1 && bc[0].clickSrc === 'url' && Math.abs(bc[0].clickAt - Date.now() / 1000) < 60, JSON.stringify(bc));
+  const keptNow = await s.page.evaluate(() => localStorage.getItem('nook_click'));
+  test('v1.3: click IDs copied to browser storage for consenting visitors', /Cj0KCQiAstoredstored1/.test(keptNow || ''), keptNow);
+  await s.page.evaluate(() => { document.getElementById('book').addEventListener('click', e => e.preventDefault()); });
+  await s.page.click('#book'); await s.page.waitForTimeout(200);
+  const href13 = await s.page.evaluate(() => document.getElementById('book').href);
+  test('v1.3: link to Lodgify carries the cookie choice (nook_c=a1m1)', /nook_c=a1m1/.test(href13), href13);
+  // a later visit in a new tab, no ad ID in the address, Google cookie gone, new GA client ID: the stored click is re-sent
+  const pg2 = await s.ctx.newPage(); const later = [];
+  await pg2.route('**/*', r => { const u = r.request().url(); if (/script\.google\.com/.test(u)) { later.push(r.request().postData()); return r.fulfill({ body: 'ok' }); }
+    r.fulfill(u.startsWith('http://nook.test/') ? { contentType: 'text/html', body: PAGE() } : /jsdelivr/.test(u) ? { contentType: 'application/javascript', body: bundle } : { contentType: 'application/javascript', body: '' }); });
+  await s.ctx.clearCookies(); await s.ctx.addCookies([{ name: '_ga', value: 'GA1.1.111111111.1795300000', url: 'http://nook.test/' }]);
+  await pg2.goto('http://nook.test/about'); await pg2.waitForTimeout(900);
+  const lb = later.filter(Boolean).map(b => { try { return JSON.parse(b); } catch (e) { return {}; } });
+  test('v1.3: later visit re-sends the stored click with the new GA client ID and its original click time', lb.length === 1 && lb[0].clickSrc === 'stored' && lb[0].gaClientId === '111111111.1795300000' && lb[0].gclid === 'Cj0KCQiAstoredstored1' && lb[0].clickAt === bc[0].clickAt, JSON.stringify(later));
+  await s.ctx.close();
+  s = await visit(browser, 'Europe/Paris', { url: 'http://nook.test/?gclid=Cj0KCQiAabcdefghijk', cookies: ['_ga=GA1.1.387258230.1795229525'], after: async p => { await p.click('.nook-cookie-decline.nook-only-optin'); await p.waitForTimeout(400); } });
+  test('v1.3: Europe declined: nothing kept in browser storage', !(await s.page.evaluate(() => localStorage.getItem('nook_click'))));
+  await s.ctx.close();
   // 10. Phone width: banner fits
   const ctx = await browser.newContext({ timezoneId: 'Australia/Melbourne', viewport: { width: 375, height: 700 } }); const pg = await ctx.newPage();
   await pg.route('**/*', r => { const u = r.request().url(); r.fulfill(u.startsWith('http://nook.test/') ? { contentType: 'text/html', body: PAGE() } : /jsdelivr/.test(u) ? { contentType: 'application/javascript', body: bundle } : { contentType: 'application/javascript', body: '' }); });
