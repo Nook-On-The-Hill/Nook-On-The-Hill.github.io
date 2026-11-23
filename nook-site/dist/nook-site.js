@@ -246,7 +246,12 @@
 })();
 
 
-/* Nook ad click ID v1.3 (23 Nov 2026, outside review round 2: each click message now says where the ID was read
+/* Nook ad click ID v1.4 (24 Nov 2026, code review: a Meta click is flagged as paid only when the landing link carries
+   our Meta ads' utm_medium=paid_social (Facebook and Instagram add the same fbclid to organic links); the backup click
+   message on the way to Lodgify now goes for Meta and gbraid/wbraid visitors too; the gbraid/wbraid click time no longer
+   resets when the landing page is reopened; stored click IDs with a time in the future are ignored, and are deleted if
+   the visitor turns marketing or analytics cookies off; Meta click IDs up to 500 characters.
+   v1.3 (23 Nov 2026, outside review round 2: each click message now says where the ID was read
    (url, cookie, saved = this tab's session storage, stored = browser storage from an earlier visit) and when the ad
    was clicked; consenting visitors' click IDs are also kept in browser storage for up to 90 days, so a return visit
    after Safari has cleared Google's cookie (and the GA client ID) still links to the ad click; links to Lodgify
@@ -271,6 +276,7 @@
 (function () {
   var MAX_AGE_DAYS = 90;                                    // Google only accepts click IDs up to 90 days old
   function valid(id) { return /^[A-Za-z0-9_-]{10,200}$/.test(String(id || '')); }
+  function validFb(id) { return /^[A-Za-z0-9_-]{10,500}$/.test(String(id || '')); }   // v1.4: newer fbclids run long
   function adsAllowed() {
     try { var c = window.nookConsent && window.nookConsent(); return !!(c && c.analytics && c.marketing); } catch (e) { return false; }
   }
@@ -307,7 +313,7 @@
     try {
       var k = JSON.parse(localStorage.getItem(KEEP) || 'null');
       if (!k || !k.g && !k.m) return null;
-      var old = function (t) { return !t || Date.now() / 1000 - t > MAX_AGE_DAYS * 86400; };
+      var old = function (t) { var age = Date.now() / 1000 - t; return !t || age > MAX_AGE_DAYS * 86400 || age < -600; };   // v1.4: not from the future either
       if (k.g && old(k.g.at)) k.g = null;
       if (k.m && old(Number((String(k.m.fbc).match(/^fb\.\d\.(\d{13})\./) || [])[1]) / 1000)) k.m = null;
       return k.g || k.m ? k : null;
@@ -317,9 +323,13 @@
     try {
       var k = kept() || {};
       if ((p.gclid || p.gbraid || p.wbraid) && p.clickSrc !== 'stored') k.g = { gclid: p.gclid, gbraid: p.gbraid, wbraid: p.wbraid, at: p.clickAt };
-      if (p.fbc) k.m = { fbc: p.fbc };
+      if (p.fbc && p.clickSrc !== 'stored') k.m = { fbc: p.fbc, pid: p.metaPaid ? fbclidOf(p.fbc) : (k.m && k.m.fbc === p.fbc ? k.m.pid || '' : '') };
       localStorage.setItem(KEEP, JSON.stringify(k));
     } catch (e) {}
+  }
+  // v1.4: the visitor turned marketing or analytics cookies off: forget the stored click IDs.
+  function forgetIfWithdrawn() {
+    try { var c = window.nookConsent && window.nookConsent(); if (c && (!c.marketing || !c.analytics)) localStorage.removeItem(KEEP); } catch (e) {}
   }
 
   // v1.2: the beacon.
@@ -328,16 +338,30 @@
   function sess(k, v) { try { if (v) sessionStorage.setItem(k, v); else v = sessionStorage.getItem(k) || ''; } catch (e) {} return v || ''; }
   function cookie(n) { var m = document.cookie.match(new RegExp('(?:^|;\\s*)' + n + '=([^;]+)')); return m ? decodeURIComponent(m[1]) : ''; }
   function gaClientId() { var m = cookie('_ga').match(/^GA\d\.\d\.(\d+\.\d+)$/); return m ? m[1] : ''; }
+  function fbclidOf(fbc) { var m = String(fbc || '').match(/^fb\.\d\.\d{10,13}\.([A-Za-z0-9_-]{10,500})$/); return m ? m[1] : ''; }
   function metaClick() {
-    var c = cookie('_fbc');
-    if (/^fb\.\d\.\d{10,13}\.[A-Za-z0-9_-]{10,250}$/.test(c)) return c;
-    var f = param('fbclid'), kept = sess('nook_fbc');
-    if (f && kept.slice(-(f.length + 1)) !== '.' + f) kept = sess('nook_fbc', 'fb.1.' + Date.now() + '.' + f);   // Meta's own format, made once
-    return kept;
+    var c = cookie('_fbc'), f = '';
+    try { f = new URLSearchParams(location.search).get('fbclid') || ''; } catch (e) {}
+    if (!validFb(f)) f = '';
+    if (f) {                                                    // v1.4: this visit's click wins over an older cookie
+      try { var um = new URLSearchParams(location.search).get('utm_medium') || ''; if (um === 'paid_social') sess('nook_meta_paid', f); } catch (e) {}
+      if (fbclidOf(c) === f) return c;
+      var made = sess('nook_fbc');
+      if (fbclidOf(made) !== f) made = sess('nook_fbc', 'fb.1.' + Date.now() + '.' + f);   // Meta's own format, made once
+      return made;
+    }
+    if (fbclidOf(c)) return c;
+    return sess('nook_fbc');
+  }
+  // v1.4: was this Meta click one of our ads? (utm_medium=paid_social on the landing link, this tab or remembered)
+  function metaPaid(fbc) {
+    var id = fbclidOf(fbc); if (!id) return false;
+    if (sess('nook_meta_paid') === id) return true;
+    var k = kept(); return !!(k && k.m && k.m.pid && k.m.pid === id);
   }
   var beaconSent = '', lastBeacon = 0;
   function sendBeacon(trigger) {
-    if (/__NOOK/.test(BEACON) || !adsAllowed()) return false;
+    if (/__NOOK/.test(BEACON) || !adsAllowed()) { forgetIfWithdrawn(); return false; }
     var cid = gaClientId();
     if (!cid) return false;                                   // Google's tag hasn't set its cookie yet
     var ci = clickInfo(), urlBraid = param('gbraid') || param('wbraid');
@@ -345,14 +369,15 @@
               wbraid: valid(sess('nook_wbraid', param('wbraid'))) ? sess('nook_wbraid') : '', fbc: metaClick(), fbp: cookie('_fbp'), note: trigger,
               clickSrc: ci.src, clickAt: ci.at };
     if (!p.gclid && (p.gbraid || p.wbraid)) {                // v1.3: gbraid/wbraid: from the URL now, or saved this session
-      if (urlBraid) { p.clickSrc = 'url'; p.clickAt = Math.floor(Date.now() / 1000); sess('nook_braid_at', String(p.clickAt)); }
-      else { p.clickSrc = 'saved'; p.clickAt = Number(sess('nook_braid_at')) || 0; }
+      if (urlBraid && urlBraid !== sess('nook_braid_id')) { p.clickSrc = 'url'; p.clickAt = Math.floor(Date.now() / 1000); sess('nook_braid_id', urlBraid); sess('nook_braid_at', String(p.clickAt)); }
+      else { p.clickSrc = urlBraid ? 'url' : 'saved'; p.clickAt = Number(sess('nook_braid_at')) || 0; }   // v1.4: same braid reopened keeps its time
     }
+    if (p.fbc) p.metaPaid = metaPaid(p.fbc);                   // v1.4
     if (!p.gclid && !p.gbraid && !p.wbraid && !p.fbc) {      // v1.3: nothing on this visit: an earlier ad click kept in browser storage?
       var k = kept();
       if (!k) return true;                                   // not from an ad: nothing to tell
       if (k.g) { p.gclid = k.g.gclid || ''; p.gbraid = k.g.gbraid || ''; p.wbraid = k.g.wbraid || ''; p.clickAt = k.g.at || 0; }
-      if (k.m) p.fbc = k.m.fbc;
+      if (k.m) { p.fbc = k.m.fbc; p.metaPaid = !!(k.m.pid && fbclidOf(k.m.fbc) === k.m.pid); }
       p.clickSrc = 'stored';
     } else keep(p);
     if (!p.clickAt) delete p.clickAt;
@@ -394,8 +419,10 @@
   // Again when they head to Lodgify to book.
   function onPress(ev) {
     var a = ev.target && ev.target.closest ? ev.target.closest('a[href*="lodgify.com"]') : null;
-    if (a) mark(a);
-    if (a && send('book_click')) sendBeacon('book_click');
+    if (!a) return;
+    mark(a);
+    send('book_click');                                       // Google Analytics event (gclid visitors only)
+    sendBeacon('book_click');                                 // v1.4: the beacon backup for every ad visitor (its own 30 s guard)
   }
   // v1.3: the cookie choice on the link (no IDs, nothing personal), to test whether Lodgify carries it through.
   function mark(a) {
