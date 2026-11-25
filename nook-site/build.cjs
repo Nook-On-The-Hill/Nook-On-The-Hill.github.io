@@ -10,8 +10,8 @@ const out = [
   '(function () {',
   '  if (window.__nookSite) return;',
   "  if (document.getElementById('nook-cookie-banner')) { console.warn('Nook: old cookie banner code is still pasted in Showit; remove it so only the loader line remains.'); return; }",
-  '  window.__nookSite = 5;', '',
-  consent, '', r('gift.js'), '', r('clickid.js'),
+  '  window.__nookSite = 6;', '',
+  consent, '', r('gift.js'), '', r('clickid.js'), '', r('events.js'),
   '})();', ''
 ].join('\n');
 const file = path.join(__dirname, 'dist', 'nook-site.js');

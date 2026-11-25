@@ -183,6 +183,48 @@ const vis = (page, sel) => page.evaluate(sel => { const e = document.querySelect
   await s.page.waitForTimeout(700);
   test('v1.4: a stored click with a time in the future is ignored', s.beacons.length === 0, JSON.stringify(s.beacons));
   await s.ctx.close();
+  // 9b. Website events v1.0 (25 Nov 2026)
+  const EV_HTML = `<a id="tobook" href="https://nookonthehill.com.au/book" onclick="return false">Book the Nook</a>
+<a id="search" href="https://checkout.lodgify.com/en/nookonthehill/449094/reservation?currency=AUD&arrival=2027-03-15&departure=2027-03-18&adults=2" onclick="return false">Search</a>
+<a id="ig" href="https://www.instagram.com/nook_on_the_hill/" onclick="return false"><span>ig</span></a>
+<a id="fb" href="https://www.facebook.com/profile.php?id=1" onclick="return false">f</a>
+<a id="yt" href="https://www.youtube.com/watch?v=x" onclick="return false">video</a>
+<textarea placeholder="email" id="em"></textarea><textarea placeholder="your message" id="msg"></textarea><a id="submit" href="#" onclick="return false">SUBMIT</a>
+<form class="ml-block-form" action="https://assets.mailerlite.com/jsonp/1/forms/2/subscribe" onsubmit="return false"><input type="email" name="fields[email]" id="mlemail"></form>
+<div class="se-img cycle-slide" id="gal" style="width:50px;height:50px">pic</div>
+<div style="height:1500px">spacer</div><div id="what-s-included" style="height:3000px">included</div><div id="footer-10" style="height:200px">end</div>`;
+  const evs = async p => (await p.evaluate(() => Array.from(window.dataLayer || []).filter(a => a[0] === 'event' && /^nook_(book_click|date_search|enquiry|signup|engage)$/.test(a[1])).map(a => Object.assign({ e: a[1] }, a[2] || {}))));
+  s = await visit(browser, 'Australia/Melbourne', { html: EV_HTML });
+  await s.page.click('#tobook'); await s.page.click('#search'); await s.page.waitForTimeout(100);
+  let E = await evs(s.page);
+  test('Events: Book the Nook link counts nook_book_click (book_page) with the button text', E.some(x => x.e === 'nook_book_click' && x.nook_stage === 'book_page' && x.nook_button === 'Book the Nook'), JSON.stringify(E));
+  const ds = E.find(x => x.e === 'nook_date_search') || {};
+  test('Events: Search to Lodgify counts a checkout book click and the dates searched (month, nights, guests, day, lead)', E.some(x => x.e === 'nook_book_click' && x.nook_stage === 'checkout' && x.nook_button === 'Search') && ds.nook_stay_month === '2027-03' && ds.nook_nights === 3 && ds.nook_adults === 2 && ds.nook_arrival_day === 'Mon' && ds.nook_lead === '91+' && ds.nook_where === 'book_page' && ds.nook_result === 'searched', JSON.stringify(E));
+  await s.page.click('#ig'); await s.page.click('#fb'); await s.page.click('#yt'); await s.page.click('#yt');
+  await s.page.click('#submit');                                  // no email typed yet: not counted
+  await s.page.fill('#em', 'guest@example.com'); await s.page.fill('#msg', 'Hello there'); await s.page.click('#submit');
+  await s.page.fill('#mlemail', 'sub@example.com'); await s.page.evaluate(() => document.querySelector('.ml-block-form').requestSubmit());
+  await s.page.click('#gal'); await s.page.click('#gal'); await s.page.waitForTimeout(100);
+  E = await evs(s.page);
+  const cnt = (e, k, v) => E.filter(x => x.e === e && (!k || x[k] === v)).length;
+  test('Events: Instagram and Facebook links count as enquiries', cnt('nook_enquiry', 'nook_method', 'instagram') === 1 && cnt('nook_enquiry', 'nook_method', 'facebook') === 1, JSON.stringify(E));
+  test('Events: YouTube link counted once per page', cnt('nook_engage', 'nook_what', 'video') === 1, JSON.stringify(E));
+  test('Events: contact form counted only once an email is filled in', cnt('nook_enquiry', 'nook_method', 'form') === 1, JSON.stringify(E));
+  test('Events: newsletter sign-up counted', cnt('nook_signup') === 1, JSON.stringify(E));
+  test('Events: gallery use counted once per page', cnt('nook_engage', 'nook_what', 'gallery') === 1, JSON.stringify(E));
+  test('Events: nothing personal is sent (no email address or message text)', !/example\.com|Hello there/.test(JSON.stringify(await s.page.evaluate(() => Array.from(window.dataLayer).map(a => Array.from(a))))));
+  await s.page.evaluate(() => document.getElementById('what-s-included').scrollIntoView()); await s.page.waitForTimeout(2400);
+  E = await evs(s.page);
+  test('Events: a tall section seen for 2 seconds counts once (whats_included)', cnt('nook_engage', 'nook_section', 'whats_included') === 1, JSON.stringify(E));
+  await s.ctx.close();
+  s = await visit(browser, 'Europe/London', { html: EV_HTML });
+  await s.page.click('#tobook'); await s.page.click('#search'); await s.page.click('#ig'); await s.page.waitForTimeout(100);
+  test('Events: Europe before agreeing, nothing sent', (await evs(s.page)).length === 0);
+  await s.ctx.close();
+  s = await visit(browser, 'Australia/Melbourne', { html: EV_HTML, storage: { nook_consent: '{"analytics":false,"marketing":false}', nook_consent_date: new Date().toISOString() } });
+  await s.page.click('#tobook'); await s.page.click('#search'); await s.page.waitForTimeout(100);
+  test('Events: analytics turned off, nothing sent', (await evs(s.page)).length === 0);
+  await s.ctx.close();
   // 10. Phone width: banner fits
   const ctx = await browser.newContext({ timezoneId: 'Australia/Melbourne', viewport: { width: 375, height: 700 } }); const pg = await ctx.newPage();
   await pg.route('**/*', r => { const u = r.request().url(); r.fulfill(u.startsWith('http://nook.test/') ? { contentType: 'text/html', body: PAGE() } : /jsdelivr/.test(u) ? { contentType: 'application/javascript', body: bundle } : { contentType: 'application/javascript', body: '' }); });
